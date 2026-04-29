@@ -10,13 +10,20 @@ app.listen(PORT, () => {
   console.log(`Webserver läuft auf Port ${PORT}`);
 });
 
-const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  SlashCommandBuilder,
+  REST,
+  Routes,
+  EmbedBuilder
+} = require("discord.js");
+
 const fs = require("fs");
-const Canvas = require("canvas");
 
 const token = process.env.DISCORD_BOT_TOKEN;
 
-// 🔥 SAFE CLIENT (kein Crash durch missing events)
+// 🧠 SAFE CLIENT (stabil für Render)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -26,7 +33,7 @@ const client = new Client({
   ]
 });
 
-// 🛡️ HARD CRASH PROTECTION
+// 💥 CRASH PROTECTION
 process.on("unhandledRejection", console.log);
 process.on("uncaughtException", console.log);
 
@@ -59,7 +66,7 @@ const roles = [
   { level: 100, name: "𝐩𝐥𝐚𝐭𝐢𝐧𝐮𝐦" }
 ];
 
-// ROLE FIX SYSTEM
+// ROLE SYSTEM
 async function fixRoles(member, level) {
   for (const r of roles) {
     const role = member.guild.roles.cache.find(x => x.name === r.name);
@@ -79,10 +86,10 @@ client.once("ready", async () => {
 
   const commands = [
     new SlashCommandBuilder().setName("rank").setDescription("Zeigt deinen Rank"),
-    new SlashCommandBuilder().setName("top").setDescription("Leaderboard anzeigen"),
-    new SlashCommandBuilder().setName("voicetime").setDescription("Zeigt deine Voice Zeit"),
-    new SlashCommandBuilder().setName("setlevelchannel").setDescription("Setzt Level Channel"),
-    new SlashCommandBuilder().setName("profile").setDescription("Zeigt dein Profil")
+    new SlashCommandBuilder().setName("top").setDescription("Leaderboard"),
+    new SlashCommandBuilder().setName("voicetime").setDescription("Voice Zeit"),
+    new SlashCommandBuilder().setName("setlevelchannel").setDescription("Setzt Channel"),
+    new SlashCommandBuilder().setName("profile").setDescription("Profil")
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(token);
@@ -95,14 +102,13 @@ client.once("ready", async () => {
   console.log("Slash Commands registriert");
 });
 
-// 🚀 SAFE VOICE XP LOOP (FIXED - NO GUILD CACHE CRASH)
+// 🔥 STABILER VOICE XP LOOP (FIXED)
 setInterval(async () => {
   try {
     const today = new Date().toDateString();
 
     for (const guild of client.guilds.cache.values()) {
 
-      // 🔥 FIX: LOOP VIA VOICE CHANNELS (STABLE)
       for (const channel of guild.channels.cache.values()) {
         if (!channel.isVoiceBased()) continue;
 
@@ -131,12 +137,11 @@ setInterval(async () => {
           if (member.voice?.selfMute || member.voice?.selfDeaf) continue;
           if (channel.members.size <= 1) continue;
 
-          // XP
           u.xp += 10;
           u.time += 60;
           u.lastXp = now;
 
-          // DAILY + STREAK
+          // DAILY
           if (!u.lastDaily) u.lastDaily = today;
 
           if (u.lastDaily !== today) {
@@ -145,7 +150,6 @@ setInterval(async () => {
             u.xp += 50 + u.streak * 10;
           }
 
-          // LEVEL UP
           const need = neededXP(u.level);
 
           if (u.xp >= need) {
@@ -171,11 +175,11 @@ setInterval(async () => {
 
     save();
   } catch (err) {
-    console.log("🔥 XP LOOP ERROR:", err);
+    console.log("XP LOOP ERROR:", err);
   }
 }, 60000);
 
-// SLASH COMMANDS
+// COMMANDS
 client.on("interactionCreate", async i => {
   if (!i.isChatInputCommand()) return;
 
@@ -228,48 +232,23 @@ client.on("interactionCreate", async i => {
     });
   }
 
+  // 🔥 FIXED RANK (OHNE CANVAS)
   if (i.commandName === "rank") {
     if (!u) return i.reply("Kein Level");
 
-    const canvas = Canvas.createCanvas(800, 250);
-    const ctx = canvas.getContext("2d");
-
-    const gradient = ctx.createLinearGradient(0, 0, 800, 250);
-    gradient.addColorStop(0, "#141414");
-    gradient.addColorStop(1, "#2a2a2a");
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 800, 250);
-
-    ctx.fillStyle = "#fff";
-    ctx.font = "36px sans-serif";
-    ctx.fillText(i.user.username, 200, 80);
-
-    ctx.font = "28px sans-serif";
-    ctx.fillText(`Level: ${u.level}`, 200, 130);
-
     const need = neededXP(u.level);
-    const percent = u.xp / need;
 
-    ctx.fillStyle = "#333";
-    ctx.fillRect(200, 170, 500, 25);
+    const embed = new EmbedBuilder()
+      .setTitle(`🏆 Rank von ${i.user.username}`)
+      .setColor("Blue")
+      .addFields(
+        { name: "📊 Level", value: `${u.level}`, inline: true },
+        { name: "⭐ XP", value: `${u.xp} / ${need}`, inline: true },
+        { name: "🎧 Voice", value: `${Math.floor((u.time || 0)/60)} min`, inline: true },
+        { name: "🔥 Streak", value: `${u.streak || 0}`, inline: true }
+      );
 
-    ctx.fillStyle = "#00ff88";
-    ctx.fillRect(200, 170, 500 * percent, 25);
-
-    const avatar = await Canvas.loadImage(i.user.displayAvatarURL({ extension: "png" }));
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(100, 120, 70, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(avatar, 30, 50, 140, 140);
-    ctx.restore();
-
-    const attachment = new AttachmentBuilder(canvas.toBuffer(), { name: "rank.png" });
-
-    return i.reply({ files: [attachment] });
+    return i.reply({ embeds: [embed] });
   }
 });
 
