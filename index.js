@@ -10,9 +10,9 @@ app.listen(PORT, () => {
   console.log(`Webserver läuft auf Port ${PORT}`);
 });
 
-const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js');
-const fs = require('fs');
-const Canvas = require('canvas');
+const { Client, GatewayIntentBits, AttachmentBuilder, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require("discord.js");
+const fs = require("fs");
+const Canvas = require("canvas");
 
 const token = process.env.DISCORD_BOT_TOKEN;
 
@@ -90,76 +90,82 @@ client.once("ready", async () => {
   console.log("Slash Commands registriert");
 });
 
-// VOICE XP SYSTEM + PROTECTION + DAILY + STREAK
+// 🚀 SAFE VOICE XP LOOP (CRASH FIXED)
 setInterval(async () => {
-  const today = new Date().toDateString();
+  try {
+    const today = new Date().toDateString();
 
-  for (const guild of client.guilds.cache.values()) {
-    await guild.members.fetch();
+    for (const guild of client.guilds.cache.values()) {
 
-    for (const member of guild.members.cache.values()) {
-      if (!member.voice.channel) continue;
-      if (member.user.bot) continue;
+      // ❌ KEIN guild.members.fetch() mehr
 
-      const id = member.id;
+      for (const member of guild.members.cache.values()) {
+        if (!member.voice?.channel) continue;
+        if (member.user.bot) continue;
 
-      if (!data.users[id]) {
-        data.users[id] = {
-          xp: 0,
-          level: 1,
-          time: 0,
-          streak: 0,
-          lastDaily: null,
-          lastXp: 0
-        };
-      }
+        const id = member.id;
 
-      const u = data.users[id];
+        if (!data.users[id]) {
+          data.users[id] = {
+            xp: 0,
+            level: 1,
+            time: 0,
+            streak: 0,
+            lastDaily: null,
+            lastXp: 0
+          };
+        }
 
-      // ANTI EXPLOIT
-      const now = Date.now();
-      if (now - u.lastXp < 30000) continue;
-      if (member.voice.selfMute || member.voice.selfDeaf) continue;
-      if (member.voice.channel.members.size <= 1) continue;
+        const u = data.users[id];
 
-      u.xp += 10;
-      u.time += 60;
-      u.lastXp = now;
+        // 🛡️ ANTI EXPLOIT
+        const now = Date.now();
+        if (now - u.lastXp < 30000) continue;
 
-      // DAILY BONUS + STREAK
-      if (!u.lastDaily) u.lastDaily = today;
+        if (member.voice.selfMute || member.voice.selfDeaf) continue;
+        if (member.voice.channel.members.size <= 1) continue;
 
-      if (u.lastDaily !== today) {
-        u.lastDaily = today;
-        u.streak = (u.streak || 0) + 1;
+        // XP
+        u.xp += 10;
+        u.time += 60;
+        u.lastXp = now;
 
-        u.xp += 50 + u.streak * 10;
-      }
+        // DAILY + STREAK
+        if (!u.lastDaily) u.lastDaily = today;
 
-      // LEVEL UP
-      const need = neededXP(u.level);
+        if (u.lastDaily !== today) {
+          u.lastDaily = today;
+          u.streak = (u.streak || 0) + 1;
+          u.xp += 50 + u.streak * 10;
+        }
 
-      if (u.xp >= need) {
-        u.xp = 0;
-        u.level++;
+        // LEVEL UP
+        const need = neededXP(u.level);
 
-        await fixRoles(member, u.level);
+        if (u.xp >= need) {
+          u.xp = 0;
+          u.level++;
 
-        const role = roles.find(r => r.level === u.level);
+          await fixRoles(member, u.level);
 
-        const ch = guild.channels.cache.get(data.config.levelChannel);
-        if (ch) {
-          ch.send(
-            `🎉 **Level Up!**\n` +
-            `👉 <@${id}> ist jetzt **Level ${u.level}** 🔥\n` +
-            (role ? `🏆 Neue Rolle: **${role.name}**` : "")
-          ).catch(() => {});
+          const role = roles.find(r => r.level === u.level);
+
+          const ch = guild.channels.cache.get(data.config.levelChannel);
+          if (ch) {
+            ch.send(
+              `🎉 **Level Up!**\n` +
+              `👉 <@${id}> ist jetzt **Level ${u.level}** 🔥\n` +
+              (role ? `🏆 Neue Rolle: **${role.name}**` : "")
+            ).catch(() => {});
+          }
         }
       }
     }
-  }
 
-  save();
+    save();
+  } catch (err) {
+    console.log("🔥 XP LOOP ERROR:", err);
+  }
 }, 60000);
 
 // SLASH COMMANDS
