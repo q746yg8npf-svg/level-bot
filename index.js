@@ -20,6 +20,7 @@ let data = {
   }
 };
 
+// LOAD DATA
 if (fs.existsSync("data.json")) {
   data = JSON.parse(fs.readFileSync("data.json"));
 }
@@ -28,12 +29,12 @@ function save() {
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 }
 
-// XP Formel (besser als vorher)
+// XP FORMEL (besser)
 function neededXP(level) {
   return Math.floor(100 * Math.pow(level, 1.5));
 }
 
-// Rollen
+// RANK ROLES
 const roles = [
   { level: 10, name: "Bronze" },
   { level: 25, name: "Silver" },
@@ -55,12 +56,13 @@ client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
   const commands = [
-    new SlashCommandBuilder()
-      .setName("rank")
-      .setDescription("Zeigt deinen Rank")
+    new SlashCommandBuilder().setName("rank").setDescription("Zeigt deinen Rank"),
+    new SlashCommandBuilder().setName("top").setDescription("Leaderboard anzeigen"),
+    new SlashCommandBuilder().setName("voicetime").setDescription("Zeigt deine Voice Zeit"),
+    new SlashCommandBuilder().setName("setlevelchannel").setDescription("Setzt Level Channel")
   ].map(c => c.toJSON());
 
-  const rest = new REST({ version: '10' }).setToken(token);
+  const rest = new REST({ version: "10" }).setToken(token);
 
   await rest.put(
     Routes.applicationCommands(client.user.id),
@@ -78,10 +80,11 @@ setInterval(() => {
       const id = member.id;
 
       if (!data.users[id]) {
-        data.users[id] = { xp: 0, level: 1 };
+        data.users[id] = { xp: 0, level: 1, time: 0 };
       }
 
       data.users[id].xp += 10;
+      data.users[id].time += 60;
 
       const needed = neededXP(data.users[id].level);
 
@@ -100,29 +103,45 @@ setInterval(() => {
   save();
 }, 60000);
 
-// PREFIX COMMAND
-client.on("messageCreate", msg => {
-  if (msg.author.bot) return;
-
-  if (msg.content === "!setlevelchannel") {
-    data.config.levelChannel = msg.channel.id;
-    save();
-    msg.reply("✅ Level Channel gesetzt");
-  }
-});
-
-// SLASH COMMAND
+// SLASH COMMANDS
 client.on("interactionCreate", async i => {
   if (!i.isChatInputCommand()) return;
 
-  if (i.commandName === "rank") {
-    const user = i.user;
+  const user = i.user;
 
-    if (!data.users[user.id]) {
-      return i.reply({ content: "Kein Level", ephemeral: true });
-    }
+  if (i.commandName === "setlevelchannel") {
+    data.config.levelChannel = i.channel.id;
+    save();
+    return i.reply({ content: "✅ Level Channel gesetzt", ephemeral: true });
+  }
 
+  if (i.commandName === "voicetime") {
     const u = data.users[user.id];
+    if (!u) return i.reply("Keine Daten");
+
+    let minutes = Math.floor((u.time || 0) / 60);
+    let hours = Math.floor(minutes / 60);
+
+    return i.reply(`⏱️ ${hours}h ${minutes % 60}m Voice Time`);
+  }
+
+  if (i.commandName === "top") {
+    let sorted = Object.entries(data.users)
+      .sort((a, b) => b[1].level - a[1].level)
+      .slice(0, 10);
+
+    let text = "🏆 Leaderboard:\n";
+
+    sorted.forEach((u, index) => {
+      text += `#${index + 1} <@${u[0]}> - Level ${u[1].level} (${u[1].xp} XP)\n`;
+    });
+
+    return i.reply(text);
+  }
+
+  if (i.commandName === "rank") {
+    const u = data.users[user.id];
+    if (!u) return i.reply("Kein Level");
 
     const canvas = Canvas.createCanvas(600, 200);
     const ctx = canvas.getContext("2d");
@@ -144,7 +163,7 @@ client.on("interactionCreate", async i => {
 
     const attachment = new AttachmentBuilder(canvas.toBuffer(), { name: "rank.png" });
 
-    i.reply({ files: [attachment] });
+    return i.reply({ files: [attachment] });
   }
 });
 
