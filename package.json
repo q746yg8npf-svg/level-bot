@@ -1,12 +1,14 @@
 {
   "name": "level-bot",
   "version": "1.0.0",
+  "description": "Discord Level Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.0.0",
-    "canvas": "^2.11.2"
+    "discord.js": "^14.14.1",
+    "canvas": "^2.11.2",
+    "express": "^4.18.2"
   }
 }
